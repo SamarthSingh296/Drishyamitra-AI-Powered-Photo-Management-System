@@ -7,8 +7,8 @@ function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/health')
-      .then(response => {
+    fetch(`${process.env.REACT_APP_API_URL}/api/health`)
+      .then(response => { 
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
