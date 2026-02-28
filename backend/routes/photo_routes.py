@@ -7,6 +7,7 @@ from models.photo import Photo
 from utils.responses import success_response, error_response
 from utils.validation import validate_file_upload
 from datetime import datetime
+from services.tasks import process_photo_faces
 
 photo_bp = Blueprint('photos', __name__)
 
@@ -55,6 +56,9 @@ def upload():
         )
         db.session.add(photo)
         db.session.commit()
+        
+        # 5. Trigger background face processing task
+        process_photo_faces.delay(photo.id)
         
         return success_response(photo.to_dict(), "Photo uploaded and registered successfully", 201)
     
