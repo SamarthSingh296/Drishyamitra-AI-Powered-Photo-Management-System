@@ -41,6 +41,7 @@ backend/instance/
 backend/database/drishyamitra.db
 *.db
 *.sqlite
+backend/data/*
 
 # Environment Variables
 .env
