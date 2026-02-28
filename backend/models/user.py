@@ -44,5 +44,6 @@ class User(db.Model):
             "id": self.id,
             "username": self.username,
             "email": self.email,
+            "role": self.role,
             "created_at": self.created_at.isoformat()
         }

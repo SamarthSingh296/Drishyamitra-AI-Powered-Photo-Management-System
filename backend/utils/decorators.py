@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import request, current_app, jsonify
 from utils.responses import validation_error, error_response
-from flask_jwt_extended import verify_jwt_in_request
+from flask_jwt_extended import verify_jwt_in_request, get_jwt
 from flask_jwt_extended.exceptions import NoAuthorizationError
 import time
 import traceback
@@ -35,7 +35,9 @@ def secure_route(admin_only=False):
         def decorated_function(*args, **kwargs):
             try:
                 verify_jwt_in_request()
-                # Here we could add role checks if User model had roles
+                claims = get_jwt()
+                if admin_only and claims.get("role") != "admin":
+                    return error_response("Admin privileges required", 403)
                 return f(*args, **kwargs)
             except NoAuthorizationError:
                 return error_response("Missing or invalid authorization token", 401)

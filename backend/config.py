@@ -40,6 +40,12 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = 3600  # 1 hour
     JWT_REFRESH_TOKEN_EXPIRES = 2592000  # 30 days
     
+    # HTTPS & Security Requirements
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    JWT_COOKIE_SECURE = True
+    
     # Upload Configurations
     UPLOAD_FOLDER = os.path.join(basedir, 'data', 'photos')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
