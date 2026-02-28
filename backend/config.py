@@ -48,6 +48,7 @@ class Config:
     
     # Upload Configurations
     UPLOAD_FOLDER = os.path.join(basedir, 'data', 'photos')
+    EMBEDDINGS_FOLDER = os.path.join(basedir, 'data', 'embeddings')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
     
     @staticmethod
