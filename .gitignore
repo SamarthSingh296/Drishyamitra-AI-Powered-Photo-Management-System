@@ -30,6 +30,8 @@ backend/test_upload.py
 backend/backend_error.log 
 backend/migrate_err.txt
 backend/auth_test.py
+backend/test_deepface.py
+backend/test_face_service.py
 
 # Production & Build
 build/

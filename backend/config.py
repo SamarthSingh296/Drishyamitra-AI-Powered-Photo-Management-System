@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
+    # Celery
+    CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL') or 'redis://localhost:6379/0'
+    CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND') or 'redis://localhost:6379/0'
+
     # Database
     DATABASE_URL = os.environ.get('DATABASE_URL') or 'sqlite:///database/drishyamitra.db'
     
