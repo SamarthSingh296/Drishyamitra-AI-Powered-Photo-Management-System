@@ -50,6 +50,12 @@ class FaceRecognitionService:
         self.embeddings_folder = Config.EMBEDDINGS_FOLDER
         self.metric = "cosine"
 
+        # Instance aliases (for backward-compat with test scripts and logging)
+        self.model_name       = self.MODEL_NAME
+        self.detector_backend = self.DETECTOR_BACKEND
+        self.align_backend    = self.ALIGN_BACKEND
+        self.distance_threshold = self.COSINE_THRESHOLD
+
         # in-process embedding cache: { user_id: [{"person": <Person>, "embedding": [...]}] }
         self._emb_cache: dict = {}
         self._cache_ts: dict = {}

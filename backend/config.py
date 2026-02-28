@@ -59,6 +59,10 @@ class Config:
     # Face recognition pipeline settings
     FACE_MODEL    = os.environ.get('FACE_MODEL', 'Facenet512')
     FACE_DETECTOR = os.environ.get('FACE_DETECTOR', 'retinaface')
+
+    # AI & Chatbot settings
+    GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+    GROQ_MODEL   = os.environ.get('GROQ_MODEL', 'llama-3.3-70b-versatile')
     
     @staticmethod
     def init_app(app):

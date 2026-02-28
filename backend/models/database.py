@@ -12,6 +12,7 @@ def init_db(app):
         from models.face import Face
         from models.person import Person
         from models.history import DeliveryHistory
+        from models.chat_log import ChatLog
         
         try:
             # Using Base.metadata.create_all(bind=engine) as requested
