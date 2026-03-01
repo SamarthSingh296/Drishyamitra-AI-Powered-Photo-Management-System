@@ -38,10 +38,12 @@ class DeliveryService:
             # 4. Log to DeliveryHistory
             status = 'sent' if success else 'failed'
             details = {
+                "delivery_medium": "email",
                 "recipient": recipient,
                 "photo_id": photo_id,
                 "photo_name": photo.filename,
-                "message": result if not success else "Success"
+                "message": result if not success else "Success",
+                "status": status
             }
             
             new_log = DeliveryHistory(
@@ -70,6 +72,7 @@ class DeliveryService:
 
             # 2. Add an initial pending log
             details = {
+                "delivery_medium": "whatsapp",
                 "recipient": recipient,
                 "photo_id": photo_id,
                 "photo_name": photo.filename,

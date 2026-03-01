@@ -1,6 +1,0 @@
-2026/03/01-18:16:50.499 15910 Reusing MANIFEST /home/samarth/Drishyamitra-AI-Powered-Photo-Management-System/whatsapp-service/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
-2026/03/01-18:16:50.505 15910 Recovering log #3
-2026/03/01-18:16:50.507 15910 Reusing old log /home/samarth/Drishyamitra-AI-Powered-Photo-Management-System/whatsapp-service/.wwebjs_auth/session/Default/Local Storage/leveldb/000003.log 
-2026/03/01-18:35:32.743 15913 Level-0 table #5: started
-2026/03/01-18:35:32.748 15913 Level-0 table #5: 20497 bytes OK
-2026/03/01-18:35:32.752 15913 Delete type=0 #3

@@ -75,3 +75,89 @@ def upload():
             os.remove(filepath)
         current_app.logger.error(f"Upload failed: {str(e)}")
         return error_response(f"An error occurred during upload: {str(e)}", 500)
+
+@photo_bp.route('/bulk_upload', methods=['POST'])
+@jwt_required()
+def bulk_upload():
+    """Handle bulk photo uploads and dispatch them seamlessly to background processing."""
+    if 'photos' not in request.files:
+        return error_response("No photos field in request", 400)
+        
+    files = request.files.getlist('photos')
+    if not files:
+        return error_response("No files selected", 400)
+        
+    user_id = get_jwt_identity()
+    uploaded_photos = []
+    errors = []
+    
+    os.makedirs(current_app.config['UPLOAD_FOLDER'], exist_ok=True)
+    
+    for file in files:
+        if file.filename == '':
+            continue
+            
+        ext = file.filename.rsplit('.', 1)[-1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            errors.append(f"{file.filename} has invalid extension")
+            continue
+            
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+        filename = secure_filename(f"user_{user_id}_{timestamp}.{ext}")
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        
+        try:
+            file.save(filepath)
+            stats = os.stat(filepath)
+            
+            photo = Photo(
+                filename=filename, 
+                filepath=filepath, 
+                user_id=user_id,
+                size=stats.st_size,
+                mime_type=file.content_type
+            )
+            db.session.add(photo)
+            db.session.flush() # flush to get photo ID
+            
+            # Queue for recognition
+            process_photo_faces.delay(photo.id)
+            
+            uploaded_photos.append({
+                "id": photo.id,
+                "filename": filename
+            })
+            
+        except Exception as e:
+            current_app.logger.error(f"Failed to process {file.filename}: {str(e)}")
+            errors.append(f"{file.filename} failed to save: {str(e)}")
+            
+    db.session.commit()
+    
+    return success_response({
+        "uploaded": uploaded_photos,
+        "failed": errors,
+        "total_successful": len(uploaded_photos)
+    }, "Bulk upload processed", 201)
+
+@photo_bp.route('/organize', methods=['POST'])
+@jwt_required()
+def organize_photos():
+    """Trigger background job to organize all photos for a user into person-specific directories"""
+    user_id = get_jwt_identity()
+    from services.tasks import organize_all_photos
+    
+    try:
+        task = organize_all_photos.delay(user_id)
+        return success_response({
+            "status": "queued",
+            "task_id": task.id
+        }, "Folder organization task has been queued in the background.", 200)
+    except Exception as e:
+        current_app.logger.error(f"Failed to queue organize task: {str(e)}")
+        # Fallback to sync execution if Celery broker is down
+        try:
+            result = organize_all_photos(user_id)
+            return success_response(result, "Folder organization completed synchronously.", 200)
+        except Exception as sync_e:
+            return error_response(f"An error occurred: {str(sync_e)}", 500)

@@ -252,3 +252,83 @@ def send_whatsapp_photo_task(self, log_id: int, user_id: int, photo_id: int, rec
                         final_log.details = final_details
                         db.session.commit()
                 raise
+
+@celery.task(bind=True, name="services.tasks.cleanup_temp_storage")
+def cleanup_temp_storage(self):
+    """
+    Periodic task to clean up old files in the temporary/cache storage.
+    """
+    app = get_app()
+    with app.app_context():
+        import time
+        tmp_folder = os.path.join(app.config.get("UPLOAD_FOLDER", ""), "temp")
+        if not os.path.exists(tmp_folder):
+            return {"status": "success", "message": "No temp folder to clean"}
+            
+        now = time.time()
+        deleted_count = 0
+        
+        for filename in os.listdir(tmp_folder):
+            filepath = os.path.join(tmp_folder, filename)
+            # Delete if older than 24 hours
+            if os.path.isfile(filepath):
+                if os.stat(filepath).st_mtime < now - 86400:
+                    try:
+                        os.remove(filepath)
+                        deleted_count += 1
+                    except Exception as e:
+                        logger.error(f"Error deleting temp file {filepath}: {e}")
+                        
+        logger.info(f"Cleaned up {deleted_count} temporary files.")
+        return {"status": "success", "deleted_count": deleted_count}
+
+@celery.task(bind=True, name="services.tasks.organize_all_photos")
+def organize_all_photos(self, user_id: int):
+    """
+    Bulk folder organization task for a user.
+    Categorizes all processed photos into person-specific directories based on recognition results.
+    """
+    app = get_app()
+    with app.app_context():
+        from models.photo import Photo
+        from models.face import Face
+        from models.person import Person
+        
+        photos = Photo.query.filter_by(user_id=user_id).all()
+        organized_count = 0
+        
+        organized_root = app.config.get(
+            "ORGANIZED_FOLDER",
+            os.path.join(app.config.get("UPLOAD_FOLDER", ""), "organized"),
+        )
+        user_dir = os.path.join(organized_root, f"user_{user_id}")
+        
+        for photo in photos:
+            faces = Face.query.filter_by(photo_id=photo.id).all()
+            if not faces:
+                continue
+                
+            abs_path = os.path.join(app.config["UPLOAD_FOLDER"], photo.filename)
+            if not os.path.exists(abs_path):
+                continue
+                
+            matched_names = set()
+            for face in faces:
+                person = Person.query.get(face.person_id)
+                if person and person.name:
+                    matched_names.add(person.name)
+            
+            for name in matched_names:
+                safe_name = "".join(c for c in name if c.isalnum() or c in " -_").strip()
+                person_dir = os.path.join(user_dir, safe_name)
+                os.makedirs(person_dir, exist_ok=True)
+                target = os.path.join(person_dir, photo.filename)
+                
+                if not os.path.exists(target):
+                    try:
+                        shutil.copy2(abs_path, target)
+                        organized_count += 1
+                    except Exception as exc:
+                        logger.error(f"Failed to organize photo {photo.filename}: {exc}")
+                        
+        return {"status": "success", "organized_count": organized_count, "user_id": user_id}
