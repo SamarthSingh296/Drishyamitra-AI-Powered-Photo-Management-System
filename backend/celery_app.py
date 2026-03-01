@@ -5,7 +5,8 @@ def make_celery(app_name=__name__):
     celery = Celery(
         app_name,
         broker=Config.CELERY_BROKER_URL,
-        backend=Config.CELERY_RESULT_BACKEND
+        backend=Config.CELERY_RESULT_BACKEND,
+        include=['services.tasks']
     )
     celery.conf.update({
         'task_serializer': 'json',

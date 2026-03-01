@@ -17,6 +17,11 @@ _flask_app = None
 def get_app():
     global _flask_app
     if _flask_app is None:
+        import sys
+        import os
+        basedir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if basedir not in sys.path:
+            sys.path.insert(0, basedir)
         from app import create_app
         _flask_app = create_app()
     return _flask_app
@@ -156,3 +161,94 @@ def process_photo_faces(self, photo_id: int):
             logger.error(f"process_photo_faces exception (photo {photo_id}): {exc}")
             # Retry with exponential back-off
             raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+
+@celery.task(bind=True, name="services.tasks.send_whatsapp_photo_task", max_retries=3)
+def send_whatsapp_photo_task(self, log_id: int, user_id: int, photo_id: int, recipient: str, message: str):
+    """
+    Celery task: Send photo via WhatsApp with retry mechanism.
+    Tracks status in DeliveryHistory. Compliance with WhatsApp constraints can be 
+    added via rate_limit or countdown on delays between similar tasks if needed.
+    """
+    import time
+    app = get_app()
+    with app.app_context():
+        from models.database import db
+        from models.photo import Photo
+        from models.history import DeliveryHistory
+        from services.whatsapp_service import WhatsAppService
+        
+        try:
+            log_record = DeliveryHistory.query.get(log_id)
+            if not log_record:
+                logger.error(f"Delivery log {log_id} not found.")
+                return {"status": "error", "message": "Log record not found"}
+                
+            photo = Photo.query.filter_by(id=photo_id, user_id=user_id).first()
+            if not photo:
+                error_msg = f"Photo {photo_id} missing or permission denied."
+                logger.error(error_msg)
+                
+                # Update log to failed
+                details = dict(log_record.details or {})
+                details['status'] = 'failed'
+                details['error'] = error_msg
+                log_record.action = 'whatsapp_share_failed'
+                log_record.details = details
+                db.session.commit()
+                return {"status": "error", "message": error_msg}
+
+            abs_path = os.path.join(app.config.get("UPLOAD_FOLDER", ""), photo.filename)
+            whatsapp_service = WhatsAppService()
+            
+            # Comply with WhatsApp policies: avoid sending instantly, wait 2 seconds
+            # In a production app with multiple deliveries, tasks can be scheduled with countdowns
+            time.sleep(2)
+            
+            # Send file via WhatsApp Service
+            success, response = whatsapp_service.send_media(
+                recipient_number=recipient,
+                media_path=abs_path,
+                caption=message
+            )
+            
+            details = log_record.details or {}
+            
+            if success:
+                details['status'] = 'delivered'
+                details['response'] = response
+                log_record.action = 'whatsapp_share_success'
+                log_record.details = details
+                db.session.commit()
+                logger.info(f"WhatsApp message successfully sent to {recipient}")
+                return {"status": "success", "response": response}
+            else:
+                error_info = response.get('error', 'Unknown Error')
+                details['status'] = 'failed'
+                details['error'] = error_info
+                log_record.action = 'whatsapp_share_failed'
+                log_record.details = details
+                db.session.commit()
+                
+                logger.error(f"Failed to send WhatsApp message: {error_info}")
+                
+                # If API gave an error, we might want to retry
+                raise Exception(f"WhatsApp API Error: {error_info}")
+
+        except Exception as exc:
+            logger.error(f"send_whatsapp_photo_task exception (log_id {log_id}): {exc}")
+            # Retry with exponential back-off (2s, 4s, 8s...) to avoid spamming the API and getting banned
+            db.session.rollback()
+            try:
+                raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+            except self.MaxRetriesExceededError:
+                # Mark as final failure when all retries are exhausted
+                with app.app_context():
+                    final_log = DeliveryHistory.query.get(log_id)
+                    if final_log:
+                        final_details = dict(final_log.details or {})
+                        final_details['status'] = 'failed'
+                        final_details['error'] = 'Max retries exceeded'
+                        final_log.action = 'whatsapp_share_failed'
+                        final_log.details = final_details
+                        db.session.commit()
+                raise
