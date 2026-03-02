@@ -67,6 +67,9 @@ class Config:
     # Gmail API configuration
     GMAIL_CREDENTIALS_PATH = os.path.join(basedir, 'credentials.json')
     GMAIL_TOKEN_PATH       = os.path.join(basedir, 'token.pickle')
+
+    # WhatsApp API configuration
+    WHATSAPP_API_URL = os.environ.get('WHATSAPP_API_URL', 'http://localhost:3000')
     
     @staticmethod
     def init_app(app):

@@ -48,7 +48,7 @@ def chat():
         ).start()
         
         return success_response({
-            "answer": ai_response,
+            "response": ai_response,
             "timestamp": datetime.utcnow().isoformat()
         }, message="AI response generated successfully")
     

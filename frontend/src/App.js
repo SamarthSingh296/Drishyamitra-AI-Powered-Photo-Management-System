@@ -26,13 +26,19 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
+  const [dashboardView, setDashboardView] = useState('gallery'); // gallery, history
+  const [historyData, setHistoryData] = useState([]);
+  const [organizing, setOrganizing] = useState(false);
+
 
   useEffect(() => {
     if (token) {
       fetchPhotos();
       fetchStats();
+      fetchHistory();
     }
   }, [token]);
+
 
   const fetchPhotos = async () => {
     try {
@@ -54,16 +60,57 @@ function App() {
     } catch (err) { console.error("Fetch stats failed", err); }
   };
 
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/history/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.status === 'success') setHistoryData(data.data.history);
+    } catch (err) { console.error("Fetch history failed", err); }
+  };
+
+  const handleOrganize = async () => {
+    setOrganizing(true);
+    try {
+      const res = await fetch(`${API_BASE}/photos/organize`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        alert("Folder organization has been queued in the background!");
+      } else {
+        alert(data.message || "Organization failed");
+      }
+    } catch (err) {
+      console.error("Organize error:", err);
+      alert("Connection error during folder organization.");
+    } finally {
+      setOrganizing(false);
+    }
+  };
+
+
   const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setUploading(true);
     const formData = new FormData();
-    formData.append('photo', file);
+    const isMultiple = files.length > 1;
+
+    for (let i = 0; i < files.length; i++) {
+      if (isMultiple) {
+        formData.append('photos', files[i]);
+      } else {
+        formData.append('photo', files[i]);
+      }
+    }
 
     try {
-      const res = await fetch(`${API_BASE}/photos/upload`, {
+      const endpoint = isMultiple ? '/photos/bulk_upload' : '/photos/upload';
+      const res = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData
@@ -210,37 +257,112 @@ function App() {
               <div className="glass-card stat-box"><h3> {stats.history_count} </h3> <p>Events Grouped</p></div>
             </div>
 
-            <div className="gallery-section">
-              <div className="section-header">
-                <h2>Your Collection</h2>
-                <div className="upload-btn-wrapper">
-                  <button className="btn-primary" disabled={uploading}>
-                    {uploading ? 'Uploading...' : 'Upload New'}
-                  </button>
-                  <input type="file" onChange={handleUpload} accept="image/*" disabled={uploading} />
-                </div>
-              </div>
-              <div className="photo-grid">
-                {photos.length > 0 ? photos.map(p => (
-                  <div key={p.id} className="photo-card glass-card">
-                    <img
-                      src={`${API_BASE}/dashboard/media/${p.filename}`}
-                      alt={p.filename}
-                      className="photo-img"
-                      onError={(e) => e.target.src = 'https://via.placeholder.com/300x200?text=Photo+Error'}
-                    />
-                    <div className="photo-info">
-                      <p className="photo-name">{p.filename.split('_').slice(2).join('_')}</p>
-                      <small>{new Date(p.upload_date).toLocaleDateString()}</small>
+            <div className="dashboard-tabs" style={{ display: 'flex', gap: '1rem', margin: '2rem 0', justifyContent: 'center' }}>
+              <button
+                className={`btn-primary ${dashboardView === 'gallery' ? '' : 'btn-outline'}`}
+                onClick={() => setDashboardView('gallery')}
+                style={dashboardView !== 'gallery' ? { background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)' } : {}}
+              >
+                Gallery
+              </button>
+              <button
+                className={`btn-primary ${dashboardView === 'history' ? '' : 'btn-outline'}`}
+                onClick={() => setDashboardView('history')}
+                style={dashboardView !== 'history' ? { background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)' } : {}}
+              >
+                Delivery History
+              </button>
+            </div>
+
+            {dashboardView === 'gallery' && (
+              <div className="gallery-section">
+                <div className="section-header">
+                  <h2>Your Collection</h2>
+                  <div className="action-buttons" style={{ display: 'flex', gap: '1rem' }}>
+                    <button className="btn-primary" onClick={handleOrganize} disabled={organizing}>
+                      {organizing ? 'Organizing...' : 'Organize Folders'}
+                    </button>
+                    <div className="upload-btn-wrapper">
+                      <button className="btn-primary" disabled={uploading}>
+                        {uploading ? 'Uploading...' : 'Upload Photos'}
+                      </button>
+                      <input type="file" onChange={handleUpload} accept="image/*" disabled={uploading} multiple />
                     </div>
                   </div>
-                )) : (
-                  <div className="empty-state glass-card">
-                    <p>No photos yet. Start by uploading some!</p>
-                  </div>
-                )}
+                </div>
+                <div className="photo-grid">
+                  {photos.length > 0 ? photos.map(p => (
+                    <div key={p.id} className="photo-card glass-card">
+                      <img
+                        src={`${API_BASE}/dashboard/media/${p.filename}`}
+                        alt={p.filename}
+                        className="photo-img"
+                        onError={(e) => e.target.src = 'https://via.placeholder.com/300x200?text=Photo+Error'}
+                      />
+                      <div className="photo-info">
+                        <p className="photo-name">{p.filename.split('_').slice(2).join('_')}</p>
+                        <small>{new Date(p.upload_date).toLocaleDateString()}</small>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="empty-state glass-card">
+                      <p>No photos yet. Start by uploading some!</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+
+            {dashboardView === 'history' && (
+              <div className="history-section">
+                <div className="section-header">
+                  <h2>Delivery History</h2>
+                </div>
+                <div className="history-list glass-card" style={{ padding: '2rem' }}>
+                  {historyData && historyData.length > 0 ? (
+                    <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                          <th style={{ padding: '1rem' }}>Date</th>
+                          <th style={{ padding: '1rem' }}>Action</th>
+                          <th style={{ padding: '1rem' }}>Medium</th>
+                          <th style={{ padding: '1rem' }}>Recipient</th>
+                          <th style={{ padding: '1rem' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyData.map(item => (
+                          <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <td style={{ padding: '1rem' }}>{new Date(item.timestamp).toLocaleString()}</td>
+                            <td style={{ padding: '1rem' }}>{item.action.replace(/_/g, ' ')}</td>
+                            <td style={{ padding: '1rem', textTransform: 'capitalize' }}>{item.details.delivery_medium || '-'}</td>
+                            <td style={{ padding: '1rem' }}>{item.details.recipient || '-'}</td>
+                            <td style={{ padding: '1rem' }}>
+                              <span style={{
+                                padding: '0.25rem 0.5rem',
+                                borderRadius: '4px',
+                                fontSize: '0.85rem',
+                                backgroundColor: item.details.status === 'delivered' || item.details.status === 'sent' || item.action.includes('success') ? 'rgba(46, 213, 115, 0.2)' :
+                                  item.details.status === 'failed' || item.action.includes('failed') ? 'rgba(255, 71, 87, 0.2)' : 'rgba(255, 165, 2, 0.2)',
+                                color: item.details.status === 'delivered' || item.details.status === 'sent' || item.action.includes('success') ? '#2ed573' :
+                                  item.details.status === 'failed' || item.action.includes('failed') ? '#ff4757' : '#ffa502'
+                              }}>
+                                {item.details.status || 'pending'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="empty-state">
+                      <p>No delivery records found.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
       </main>
